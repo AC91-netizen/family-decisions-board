@@ -5,25 +5,25 @@
 <title>Family Decisions Board</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<!-- Firebase compat SDKs -->
+<!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
 body {
+  margin:0;
   font-family: Arial, sans-serif;
   background:#0f172a;
   color:#fff;
   text-align:center;
-  margin:0;
 }
 h1 {
   padding:16px;
 }
 .board {
   display:flex;
-  flex-wrap:wrap;
   justify-content:center;
+  flex-wrap:wrap;
 }
 .card {
   background:#1e293b;
@@ -36,17 +36,17 @@ button {
   width:100%;
   padding:10px;
   margin:6px 0;
-  border-radius:8px;
   border:none;
+  border-radius:8px;
   font-size:16px;
 }
 .good { background:#22c55e; }
 .bad { background:#ef4444; }
 .serve { background:#3b82f6; }
 .reset { background:#64748b; }
-.stats {
-  margin:10px 0;
+.stat {
   font-size:18px;
+  margin:6px 0;
 }
 </style>
 </head>
@@ -54,103 +54,101 @@ button {
 <body>
 
 <h1>Family Decisions Board</h1>
-
 <div class="board" id="board"></div>
 
 <script>
-// 🔐 CHANGE THIS PIN
-const PARENT_PIN = "1234";
+window.onload = function () {
 
-// 🔥 FIREBASE CONFIG (YOUR PROJECT)
-firebase.initializeApp({
-  apiKey: "AIzaSyDdz0V7qMrYPN5_NmCYUMHSSf9JL5HAkAM",
-  authDomain: "family-decisions-board-57d6a.firebaseapp.com",
-  projectId: "family-decisions-board-57d6a"
-});
+  // 🔐 CHANGE THIS PIN
+  const PARENT_PIN = "1234";
 
-const db = firebase.firestore();
+  // 👨‍👩‍👧 Children
+  const children = ["Nevaeh", "Arley"];
 
-// 👨‍👩‍👧 CHILDREN
-const children = ["Nevaeh", "Arley"];
+  const board = document.getElementById("board");
 
-function askPin() {
-  return prompt("Parent PIN:");
-}
-
-// Initialise documents if missing
-children.forEach(name => {
-  const ref = db.collection("familyBoard").doc(name);
-  ref.get().then(doc => {
-    if (!doc.exists) {
-      ref.set({
-        good: 0,
-        bad: 0,
-        techLock: 0
-      });
-    }
-  });
-});
-
-function renderChild(name) {
-  const ref = db.collection("familyBoard").doc(name);
-
-  ref.onSnapshot(doc => {
-    const d = doc.data();
-    const el = document.getElementById(name);
-    el.innerHTML = `
+  // Build UI FIRST (so page never stays blank)
+  children.forEach(name => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.id = name;
+    card.innerHTML = `
       <h2>${name}</h2>
-      <div class="stats">🟢 Good: ${d.good}</div>
-      <div class="stats">🔴 Bad: ${d.bad}</div>
-      <div class="stats">📵 Tech Lock Days: ${d.techLock}</div>
-
+      <div class="stat">🟢 Good: 0</div>
+      <div class="stat">🔴 Bad: 0</div>
+      <div class="stat">📵 Tech Lock Days: 0</div>
       <button class="good">+ Good Decision</button>
       <button class="bad">+ Bad Decision</button>
       <button class="serve">Serve 1 Tech Day</button>
       <button class="reset">Reset (Parent)</button>
     `;
-
-    el.querySelector(".good").onclick = () => {
-      ref.update({ good: d.good + 1 });
-    };
-
-    el.querySelector(".bad").onclick = () => {
-      if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
-
-      let bad = d.bad + 1;
-      let good = Math.max(0, d.good - 1);
-      let techLock = d.techLock;
-
-      if (bad % 3 === 0) {
-        const after3pm = new Date().getHours() >= 15;
-        techLock += after3pm ? 2 : 1;
-      }
-
-      ref.update({ bad, good, techLock });
-    };
-
-    el.querySelector(".serve").onclick = () => {
-      if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
-      if (d.techLock > 0) {
-        ref.update({ techLock: d.techLock - 1 });
-      }
-    };
-
-    el.querySelector(".reset").onclick = () => {
-      if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
-      ref.set({ good: 0, bad: 0, techLock: 0 });
-    };
+    board.appendChild(card);
   });
-}
 
-// Build UI
-const board = document.getElementById("board");
-children.forEach(name => {
-  const div = document.createElement("div");
-  div.className = "card";
-  div.id = name;
-  board.appendChild(div);
-  renderChild(name);
-});
+  // 🔥 Firebase Init
+  firebase.initializeApp({
+    apiKey: "AIzaSyDdz0V7qMrYPN5_NmCYUMHSSf9JL5HAkAM",
+    authDomain: "family-decisions-board-57d6a.firebaseapp.com",
+    projectId: "family-decisions-board-57d6a"
+  });
+
+  const db = firebase.firestore();
+
+  function askPin() {
+    return prompt("Parent PIN:");
+  }
+
+  // Initialise & bind logic
+  children.forEach(name => {
+    const ref = db.collection("familyBoard").doc(name);
+
+    ref.get().then(doc => {
+      if (!doc.exists) {
+        ref.set({ good: 0, bad: 0, techLock: 0 });
+      }
+    });
+
+    ref.onSnapshot(doc => {
+      if (!doc.exists) return;
+      const d = doc.data();
+      const el = document.getElementById(name);
+
+      el.querySelectorAll(".stat")[0].innerText = "🟢 Good: " + d.good;
+      el.querySelectorAll(".stat")[1].innerText = "🔴 Bad: " + d.bad;
+      el.querySelectorAll(".stat")[2].innerText = "📵 Tech Lock Days: " + d.techLock;
+
+      el.querySelector(".good").onclick = () => {
+        ref.update({ good: d.good + 1 });
+      };
+
+      el.querySelector(".bad").onclick = () => {
+        if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
+
+        let bad = d.bad + 1;
+        let good = Math.max(0, d.good - 1);
+        let techLock = d.techLock;
+
+        if (bad % 3 === 0) {
+          const after3pm = new Date().getHours() >= 15;
+          techLock += after3pm ? 2 : 1;
+        }
+
+        ref.update({ bad, good, techLock });
+      };
+
+      el.querySelector(".serve").onclick = () => {
+        if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
+        if (d.techLock > 0) ref.update({ techLock: d.techLock - 1 });
+      };
+
+      el.querySelector(".reset").onclick = () => {
+        if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
+        ref.set({ good: 0, bad: 0, techLock: 0 });
+      };
+    });
+  });
+
+};
 </script>
 
 </body>
