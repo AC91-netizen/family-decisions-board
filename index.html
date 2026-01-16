@@ -51,7 +51,6 @@ button {
 <script>
 window.onload = function () {
 
-  const PARENT_PIN = "1234";
   const children = ["Nevaeh", "Arley"];
 
   firebase.initializeApp({
@@ -63,11 +62,6 @@ window.onload = function () {
   const db = firebase.firestore();
   const board = document.getElementById("board");
 
-  function askPin() {
-    return prompt("Parent PIN:");
-  }
-
-  // Build UI
   children.forEach(name => {
     const card = document.createElement("div");
     card.className = "card";
@@ -83,12 +77,11 @@ window.onload = function () {
       <button class="spendBtn">⭐ Spend Good Token</button>
       <button class="choreBtn">🧹 Complete Chore</button>
       <button class="serveBtn">Serve 1 Tech Day</button>
-      <button class="resetBtn">Reset (Parent)</button>
+      <button class="resetBtn">Reset</button>
     `;
     board.appendChild(card);
   });
 
-  // Logic
   children.forEach(name => {
     const ref = db.collection("familyBoard").doc(name);
 
@@ -118,8 +111,6 @@ window.onload = function () {
       };
 
       el.querySelector(".badBtn").onclick = () => {
-        if (askPin() !== PARENT_PIN) return;
-
         let badTotal = d.badTotal + 1;
         let badActive = d.badActive + 1;
         let good = Math.max(0, d.good - 1);
@@ -143,24 +134,20 @@ window.onload = function () {
       };
 
       el.querySelector(".spendBtn").onclick = () => {
-        if (askPin() !== PARENT_PIN) return;
         if (d.good > 0) ref.update({ good: d.good - 1 });
       };
 
       el.querySelector(".choreBtn").onclick = () => {
-        if (askPin() !== PARENT_PIN) return;
         if (d.badActive > 0) ref.update({ badActive: d.badActive - 1 });
       };
 
       el.querySelector(".serveBtn").onclick = () => {
-        if (askPin() !== PARENT_PIN) return;
         if (d.techLockRemaining > 0) {
           ref.update({ techLockRemaining: d.techLockRemaining - 1 });
         }
       };
 
       el.querySelector(".resetBtn").onclick = () => {
-        if (askPin() !== PARENT_PIN) return;
         ref.set({
           good: 0,
           badActive: 0,
