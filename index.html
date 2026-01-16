@@ -22,15 +22,19 @@ h1 {
 }
 .board {
   display:flex;
-  justify-content:center;
   flex-wrap:wrap;
+  justify-content:center;
 }
 .card {
   background:#1e293b;
   border-radius:14px;
   padding:16px;
   margin:12px;
-  width:300px;
+  width:320px;
+}
+.stat {
+  font-size:18px;
+  margin:6px 0;
 }
 button {
   width:100%;
@@ -40,14 +44,12 @@ button {
   border-radius:8px;
   font-size:16px;
 }
-.good { background:#22c55e; }
-.bad { background:#ef4444; }
-.serve { background:#3b82f6; }
-.reset { background:#64748b; }
-.stat {
-  font-size:18px;
-  margin:6px 0;
-}
+.goodBtn { background:#22c55e; }
+.badBtn { background:#ef4444; }
+.spendBtn { background:#16a34a; }
+.choreBtn { background:#f59e0b; }
+.serveBtn { background:#3b82f6; }
+.resetBtn { background:#64748b; }
 </style>
 </head>
 
@@ -59,33 +61,15 @@ button {
 <script>
 window.onload = function () {
 
-  // 🔐 CHANGE THIS PIN
+  /* 🔐 CHANGE THIS */
   const PARENT_PIN = "1234";
 
-  // 👨‍👩‍👧 Children
+  /* 👨‍👩‍👧 Children */
   const children = ["Nevaeh", "Arley"];
 
   const board = document.getElementById("board");
 
-  // Build UI FIRST (so page never stays blank)
-  children.forEach(name => {
-    const card = document.createElement("div");
-    card.className = "card";
-    card.id = name;
-    card.innerHTML = `
-      <h2>${name}</h2>
-      <div class="stat">🟢 Good: 0</div>
-      <div class="stat">🔴 Bad: 0</div>
-      <div class="stat">📵 Tech Lock Days: 0</div>
-      <button class="good">+ Good Decision</button>
-      <button class="bad">+ Bad Decision</button>
-      <button class="serve">Serve 1 Tech Day</button>
-      <button class="reset">Reset (Parent)</button>
-    `;
-    board.appendChild(card);
-  });
-
-  // 🔥 Firebase Init
+  /* 🔥 Firebase Init */
   firebase.initializeApp({
     apiKey: "AIzaSyDdz0V7qMrYPN5_NmCYUMHSSf9JL5HAkAM",
     authDomain: "family-decisions-board-57d6a.firebaseapp.com",
@@ -98,13 +82,41 @@ window.onload = function () {
     return prompt("Parent PIN:");
   }
 
-  // Initialise & bind logic
+  /* Build UI first */
+  children.forEach(name => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.id = name;
+    card.innerHTML = `
+      <h2>${name}</h2>
+
+      <div class="stat goodStat">🟢 Good: 0</div>
+      <div class="stat badStat">🔴 Bad (Active): 0</div>
+      <div class="stat lockStat">📵 Tech Lock Days: 0</div>
+
+      <button class="goodBtn">+ Good Decision</button>
+      <button class="badBtn">+ Bad Decision</button>
+      <button class="spendBtn">⭐ Spend Good Token</button>
+      <button class="choreBtn">🧹 Complete Chore</button>
+      <button class="serveBtn">Serve 1 Tech Day</button>
+      <button class="resetBtn">Reset (Parent)</button>
+    `;
+    board.appendChild(card);
+  });
+
+  /* Firestore logic */
   children.forEach(name => {
     const ref = db.collection("familyBoard").doc(name);
 
+    // Create doc if missing
     ref.get().then(doc => {
       if (!doc.exists) {
-        ref.set({ good: 0, bad: 0, techLock: 0 });
+        ref.set({
+          good: 0,
+          badActive: 0,
+          badTotal: 0,
+          techLock: 0
+        });
       }
     });
 
@@ -113,41 +125,62 @@ window.onload = function () {
       const d = doc.data();
       const el = document.getElementById(name);
 
-      el.querySelectorAll(".stat")[0].innerText = "🟢 Good: " + d.good;
-      el.querySelectorAll(".stat")[1].innerText = "🔴 Bad: " + d.bad;
-      el.querySelectorAll(".stat")[2].innerText = "📵 Tech Lock Days: " + d.techLock;
+      el.querySelector(".goodStat").innerText = "🟢 Good: " + d.good;
+      el.querySelector(".badStat").innerText = "🔴 Bad (Active): " + d.badActive;
+      el.querySelector(".lockStat").innerText = "📵 Tech Lock Days: " + d.techLock;
 
-      el.querySelector(".good").onclick = () => {
+      // Good decision
+      el.querySelector(".goodBtn").onclick = () => {
         ref.update({ good: d.good + 1 });
       };
 
-      el.querySelector(".bad").onclick = () => {
+      // Bad decision
+      el.querySelector(".badBtn").onclick = () => {
         if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
 
-        let bad = d.bad + 1;
+        let badTotal = d.badTotal + 1;
+        let badActive = d.badActive + 1;
         let good = Math.max(0, d.good - 1);
         let techLock = d.techLock;
 
-        if (bad % 3 === 0) {
+        if (badTotal % 3 === 0) {
           const after3pm = new Date().getHours() >= 15;
           techLock += after3pm ? 2 : 1;
         }
 
-        ref.update({ bad, good, techLock });
+        ref.update({ badTotal, badActive, good, techLock });
       };
 
-      el.querySelector(".serve").onclick = () => {
+      // Spend good token
+      el.querySelector(".spendBtn").onclick = () => {
+        if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
+        if (d.good > 0) ref.update({ good: d.good - 1 });
+      };
+
+      // Complete chore
+      el.querySelector(".choreBtn").onclick = () => {
+        if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
+        if (d.badActive > 0) ref.update({ badActive: d.badActive - 1 });
+      };
+
+      // Serve tech lock
+      el.querySelector(".serveBtn").onclick = () => {
         if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
         if (d.techLock > 0) ref.update({ techLock: d.techLock - 1 });
       };
 
-      el.querySelector(".reset").onclick = () => {
+      // Reset child
+      el.querySelector(".resetBtn").onclick = () => {
         if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
-        ref.set({ good: 0, bad: 0, techLock: 0 });
+        ref.set({
+          good: 0,
+          badActive: 0,
+          badTotal: 0,
+          techLock: 0
+        });
       };
     });
   });
-
 };
 </script>
 
