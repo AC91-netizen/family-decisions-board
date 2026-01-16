@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Family Decisions Board</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+body{margin:0;font-family:system-ui;background:#0b1d33;color:white}
+header{text-align:center;padding:14px;font-size:22px;font-weight:800}
+.board{max-width:900px;margin:auto;padding:16px}
+.child{background:#122a46;border-radius:14px;padding:16px;margin-bottom:16px}
+h2{text-align:center}
+.tokens{display:flex;justify-content:space-around}
+.token span{font-size:28px;font-weight:800;display:block}
+.good{color:#4caf50}.bad{color:#f44336}
+.tech{text-align:center;margin:10px;font-weight:700;color:#ff9800}
+button{padding:10px;border:none;border-radius:10px;font-weight:700;margin:4px;width:100%}
+.goodBtn{background:#4caf50}
+.badBtn{background:#f44336;color:white}
+.spendBtn{background:#8bc34a}
+.choreBtn{background:#03a9f4}
+.serveBtn{background:#ffb300}
+.resetBtn{background:#9e9e9e}
+</style>
+</head>
+
+<body>
+<header>🌟 Family Decisions Board</header>
+<div class="board" id="board"></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "PASTE_FROM_FIREBASE",
+  authDomain: "PASTE_FROM_FIREBASE",
+  projectId: "PASTE_FROM_FIREBASE",
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const ref = db.collection("familyBoard").doc("main");
+
+const DAY = 86400000;
+const CUTOFF = 15;
+const PARENT_PIN = "1234"; // CHANGE THIS
+
+let data = {
+  Nevaeh:{good:0,bad:0,owed:0,served:0,lockUntil:0},
+  Arley:{good:0,bad:0,owed:0,served:0,lockUntil:0}
+};
+
+ref.onSnapshot(s=>{
+  if(s.exists) data=s.data();
+  else ref.set(data);
+  render();
+});
+
+function parentCheck(){
+  return prompt("Parent PIN")===PARENT_PIN;
+}
+
+function addGood(k){data[k].good++;save();}
+function spendGood(k){if(data[k].good>0)data[k].good--;save();}
+
+function addBad(k){
+  if(!parentCheck()) return;
+  const c=data[k];
+  c.bad++; if(c.good>0)c.good--;
+  if(c.bad%3===0){
+    c.owed++;
+    let start=new Date();
+    if(start.getHours()>=CUTOFF) start.setDate(start.getDate()+1);
+    start.setHours(0,0,0,0);
+    if(c.lockUntil<Date.now()) c.lockUntil=start.getTime();
+    c.lockUntil+=DAY;
+  }
+  save();
+}
+
+function chore(k){if(data[k].bad>0)data[k].bad--;save();}
+
+function serveDay(k){
+  if(!parentCheck()) return;
+  const c=data[k];
+  if(c.lockUntil>Date.now()){
+    c.lockUntil-=DAY;
+    c.served++;
+  }
+  save();
+}
+
+function resetChild(k){
+  if(!parentCheck()) return;
+  data[k]={good:0,bad:0,owed:0,served:0,lockUntil:0};
+  save();
+}
+
+function save(){ref.set(data);}
+
+function lockText(c){
+  if(c.lockUntil<=Date.now()) return "✅ Tech Available";
+  return "📵 Tech Locked ("+Math.ceil((c.lockUntil-Date.now())/DAY)+" days)";
+}
+
+function render(){
+  const b=document.getElementById("board");
+  b.innerHTML="";
+  for(let k in data){
+    const c=data[k];
+    b.innerHTML+=`
+    <div class="child">
+      <h2>${k}</h2>
+      <div class="tokens">
+        <div class="token good"><span>${c.good}</span>Good</div>
+        <div class="token bad"><span>${c.bad}</span>Bad</div>
+      </div>
+      <div class="tech">${lockText(c)}</div>
+      <button class="goodBtn" onclick="addGood('${k}')">+ Good</button>
+      <button class="spendBtn" onclick="spendGood('${k}')">- Spend</button>
+      <button class="badBtn" onclick="addBad('${k}')">+ Bad</button>
+      <button class="choreBtn" onclick="chore('${k}')">🧹 Chore</button>
+      <button class="serveBtn" onclick="serveDay('${k}')">⏱ Serve 1 Day</button>
+      <button class="resetBtn" onclick="resetChild('${k}')">♻ Reset</button>
+    </div>`;
+  }
+}
+</script>
+</body>
+</html>
