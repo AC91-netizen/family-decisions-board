@@ -5,7 +5,6 @@
 <title>Family Decisions Board</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
@@ -17,14 +16,8 @@ body {
   color:#fff;
   text-align:center;
 }
-h1 {
-  padding:16px;
-}
-.board {
-  display:flex;
-  flex-wrap:wrap;
-  justify-content:center;
-}
+h1 { padding:16px; }
+.board { display:flex; flex-wrap:wrap; justify-content:center; }
 .card {
   background:#1e293b;
   border-radius:14px;
@@ -32,10 +25,7 @@ h1 {
   margin:12px;
   width:320px;
 }
-.stat {
-  font-size:18px;
-  margin:6px 0;
-}
+.stat { font-size:18px; margin:6px 0; }
 button {
   width:100%;
   padding:10px;
@@ -61,15 +51,9 @@ button {
 <script>
 window.onload = function () {
 
-  /* 🔐 CHANGE THIS */
   const PARENT_PIN = "1234";
-
-  /* 👨‍👩‍👧 Children */
   const children = ["Nevaeh", "Arley"];
 
-  const board = document.getElementById("board");
-
-  /* 🔥 Firebase Init */
   firebase.initializeApp({
     apiKey: "AIzaSyDdz0V7qMrYPN5_NmCYUMHSSf9JL5HAkAM",
     authDomain: "family-decisions-board-57d6a.firebaseapp.com",
@@ -77,22 +61,22 @@ window.onload = function () {
   });
 
   const db = firebase.firestore();
+  const board = document.getElementById("board");
 
   function askPin() {
     return prompt("Parent PIN:");
   }
 
-  /* Build UI first */
+  // Build UI
   children.forEach(name => {
     const card = document.createElement("div");
     card.className = "card";
     card.id = name;
     card.innerHTML = `
       <h2>${name}</h2>
-
       <div class="stat goodStat">🟢 Good: 0</div>
       <div class="stat badStat">🔴 Bad (Active): 0</div>
-      <div class="stat lockStat">📵 Tech Lock Days: 0</div>
+      <div class="stat lockStat">📵 Tech Lock Remaining: 0</div>
 
       <button class="goodBtn">+ Good Decision</button>
       <button class="badBtn">+ Bad Decision</button>
@@ -104,18 +88,18 @@ window.onload = function () {
     board.appendChild(card);
   });
 
-  /* Firestore logic */
+  // Logic
   children.forEach(name => {
     const ref = db.collection("familyBoard").doc(name);
 
-    // Create doc if missing
     ref.get().then(doc => {
       if (!doc.exists) {
         ref.set({
           good: 0,
           badActive: 0,
           badTotal: 0,
-          techLock: 0
+          techLockEarned: 0,
+          techLockRemaining: 0
         });
       }
     });
@@ -127,56 +111,62 @@ window.onload = function () {
 
       el.querySelector(".goodStat").innerText = "🟢 Good: " + d.good;
       el.querySelector(".badStat").innerText = "🔴 Bad (Active): " + d.badActive;
-      el.querySelector(".lockStat").innerText = "📵 Tech Lock Days: " + d.techLock;
+      el.querySelector(".lockStat").innerText = "📵 Tech Lock Remaining: " + d.techLockRemaining;
 
-      // Good decision
       el.querySelector(".goodBtn").onclick = () => {
         ref.update({ good: d.good + 1 });
       };
 
-      // Bad decision
       el.querySelector(".badBtn").onclick = () => {
-        if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
+        if (askPin() !== PARENT_PIN) return;
 
         let badTotal = d.badTotal + 1;
         let badActive = d.badActive + 1;
         let good = Math.max(0, d.good - 1);
-        let techLock = d.techLock;
+        let techEarned = d.techLockEarned;
+        let techRemaining = d.techLockRemaining;
 
         if (badTotal % 3 === 0) {
           const after3pm = new Date().getHours() >= 15;
-          techLock += after3pm ? 2 : 1;
+          const days = after3pm ? 2 : 1;
+          techEarned += days;
+          techRemaining += days;
         }
 
-        ref.update({ badTotal, badActive, good, techLock });
+        ref.update({
+          badTotal,
+          badActive,
+          good,
+          techLockEarned: techEarned,
+          techLockRemaining: techRemaining
+        });
       };
 
-      // Spend good token
       el.querySelector(".spendBtn").onclick = () => {
-        if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
+        if (askPin() !== PARENT_PIN) return;
         if (d.good > 0) ref.update({ good: d.good - 1 });
       };
 
-      // Complete chore
       el.querySelector(".choreBtn").onclick = () => {
-        if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
+        if (askPin() !== PARENT_PIN) return;
         if (d.badActive > 0) ref.update({ badActive: d.badActive - 1 });
       };
 
-      // Serve tech lock
       el.querySelector(".serveBtn").onclick = () => {
-        if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
-        if (d.techLock > 0) ref.update({ techLock: d.techLock - 1 });
+        if (askPin() !== PARENT_PIN) return;
+        if (d.techLockRemaining > 0) {
+          ref.update({ techLockRemaining: d.techLockRemaining - 1 });
+        }
       };
 
-      // Reset child
       el.querySelector(".resetBtn").onclick = () => {
-        if (askPin() !== PARENT_PIN) return alert("Wrong PIN");
+        if (askPin() !== PARENT_PIN) return;
         ref.set({
           good: 0,
           badActive: 0,
           badTotal: 0,
-          techLock: 0
+          techLockEarned: 0,
+          techLockRemaining: 0
         });
       };
     });
