@@ -98,22 +98,22 @@ window.onload = function () {
       const d = doc.data();
       card.querySelector(".goodStat").innerText = "🟢 Good: "+d.good;
       card.querySelector(".badStat").innerText = "🔴 Bad (Active): "+d.badActive;
-      card.querySelector(".lockStat").innerText = d.techLockRemaining>0 ? "📵 Tech Lock Remaining: "+d.techLockRemaining : "🎉 Tech Available! Keep up the good choices!";
+      card.querySelector(".lockStat").innerText = d.techLockRemaining>0 ? "📵 Tech Lock Remaining: "+d.techLockRemaining : "🎉 Tech Available!";
 
-      // Tips logic based on individual stats
+      // Constructive tips based on individual values
       const tip = card.querySelector(".tip");
       if(d.techLockRemaining>0){
-        tip.innerText = "⚠️ Tech is locked. Focus on good behaviour!";
+        tip.innerText = "📵 Tech is locked. Focus on positive choices and earning good tokens to reduce red tokens.";
       } else if(d.badActive>=3){
-        tip.innerText = "Uh-oh! Too many bad decisions, be careful!";
+        tip.innerText = `You have ${d.badActive} red tokens. Doing chores can reduce them. Keep earning blue tokens by making good choices!`;
       } else if(d.badActive>0){
-        tip.innerText = "Be careful! Try to avoid bad decisions.";
+        tip.innerText = `You have ${d.badActive} red token(s). Chores help remove them. Keep making good choices!`;
       } else if(d.good>=5){
-        tip.innerText = "Awesome job! Keep up the great choices!";
+        tip.innerText = `Awesome! You have ${d.good} blue tokens. Keep up the great choices!`;
       } else if(d.good>0){
-        tip.innerText = "Good work! Keep earning tokens!";
+        tip.innerText = `Good work! You have ${d.good} blue token(s). Keep earning more!`;
       } else {
-        tip.innerText = "Make positive choices to earn rewards!";
+        tip.innerText = "Make positive choices to earn blue tokens!";
       }
     });
   });
