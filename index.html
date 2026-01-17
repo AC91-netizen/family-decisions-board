@@ -11,7 +11,7 @@
 
 <style>
 body {margin:0;font-family:Arial,sans-serif;background:#0f172a;color:#fff;text-align:center;}
-h1 {padding:16px; cursor:pointer;}
+h1 {padding:16px;}
 .board {display:flex; flex-wrap:wrap; justify-content:center;}
 .card {background:#1e293b;border-radius:14px;padding:16px;margin:12px;width:320px;}
 .stat {font-size:18px;margin:6px 0;}
@@ -22,6 +22,7 @@ button {width:100%;padding:10px;margin:6px 0;border:none;border-radius:8px;font-
 .choreBtn {background:#f59e0b;}
 .serveBtn {background:#3b82f6;}
 .resetBtn {background:#64748b;}
+#parentBtn {background:#fbbf24;width:auto;padding:8px 16px;margin:8px;border-radius:8px;font-size:16px;cursor:pointer;}
 .modalOverlay {position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;}
 .modal {background:#1e293b;padding:20px;border-radius:12px;width:90%;max-width:400px;text-align:left;}
 .closeBtn {margin-top:12px;background:#ef4444;color:#fff;width:auto;padding:6px 12px;border-radius:6px;}
@@ -31,7 +32,8 @@ input[type=number]{width:60px;}
 
 <body>
 
-<h1 id="pageTitle">Family Decisions Board</h1>
+<h1>Family Decisions Board</h1>
+<button id="parentBtn">Parent Settings</button>
 <div class="board" id="board"></div>
 
 <!-- Rules Modal -->
@@ -72,16 +74,13 @@ window.onload = function () {
   });
   const db = firebase.firestore();
 
-  // Parent modal long-press title
-  let pressTimer;
-  const title = document.getElementById("pageTitle");
-  title.addEventListener("mousedown", () => {
-    pressTimer = setTimeout(()=>{ document.getElementById("parentModal").style.display="flex"; }, 1000);
-  });
-  title.addEventListener("mouseup", ()=>{ clearTimeout(pressTimer); });
+  // Open Parent Settings modal
+  document.getElementById("parentBtn").onclick = () => {
+    document.getElementById("parentModal").style.display="flex";
+  };
 
-  // Rules modal double-click title
-  title.addEventListener("dblclick", ()=>{ document.getElementById("rulesModal").style.display="flex"; });
+  // Double-tap title opens rules
+  document.querySelector("h1").addEventListener("dblclick", ()=>{ document.getElementById("rulesModal").style.display="flex"; });
 
   // Build cards and parent controls
   const parentControls = document.getElementById("parentControls");
@@ -111,7 +110,7 @@ window.onload = function () {
     // Initialize doc if missing
     ref.get().then(doc=>{ if(!doc.exists) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); });
 
-    // Attach buttons once
+    // Buttons
     const goodBtn = el.querySelector(".goodBtn");
     const badBtn = el.querySelector(".badBtn");
     const spendBtn = el.querySelector(".spendBtn");
@@ -119,30 +118,62 @@ window.onload = function () {
     const serveBtn = el.querySelector(".serveBtn");
     const resetBtn = el.querySelector(".resetBtn");
 
-    let resetTimer;
-    resetBtn.addEventListener("mousedown",()=>{ resetTimer=setTimeout(()=>{ ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); },2000); });
-    resetBtn.addEventListener("mouseup",()=>{ clearTimeout(resetTimer); });
-
-    goodBtn.onclick = ()=>ref.update({good:(el.dataset.good||0)+1});
-    badBtn.onclick = ()=>{
-      let total=parseInt(el.dataset.badTotal||0)+1;
-      let active=parseInt(el.dataset.badActive||0)+1;
-      let good=Math.max(0,(el.dataset.good||0)-1);
-      let techEarned=parseInt(el.dataset.techEarned||0);
-      let techRemaining=parseInt(el.dataset.techRemaining||0);
-      if(total%3===0){
-        const after3pm = new Date().getHours()>=15;
-        const days = after3pm?2:1;
-        techEarned += days;
-        techRemaining += days;
+    // Reset button
+    resetBtn.onclick = () => {
+      if(confirm(`Reset ${name}'s stats?`)) {
+        ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0});
       }
-      ref.update({badTotal:total,badActive:active,good,techLockEarned:techEarned,techLockRemaining:techRemaining});
     };
-    spendBtn.onclick=()=>{ const g=parseInt(el.dataset.good||0); if(g>0) ref.update({good:g-1}); };
-    choreBtn.onclick=()=>{ const b=parseInt(el.dataset.badActive||0); if(b>0) ref.update({badActive:b-1}); };
-    serveBtn.onclick=()=>{ const t=parseInt(el.dataset.techRemaining||0); if(t>0) ref.update({techLockRemaining:t-1}); };
 
-    // Parent Controls
+    // Other buttons
+    goodBtn.onclick = () => {
+      ref.get().then(doc=>{
+        const val = (doc.data().good||0)+1;
+        ref.update({good:val});
+      });
+    };
+
+    badBtn.onclick = () => {
+      ref.get().then(doc=>{
+        let data = doc.data();
+        let totalBad = (data.badTotal||0)+1;
+        let activeBad = (data.badActive||0)+1;
+        let good = Math.max(0,(data.good||0)-1);
+        let techEarned = data.techLockEarned||0;
+        let techRemaining = data.techLockRemaining||0;
+
+        if(totalBad % 3 === 0){
+          const after3pm = new Date().getHours()>=15;
+          const days = after3pm ? 2:1;
+          techEarned += days;
+          techRemaining += days;
+        }
+        ref.update({badTotal:totalBad,badActive:activeBad,good,techLockEarned:techEarned,techLockRemaining:techRemaining});
+      });
+    };
+
+    spendBtn.onclick = () => {
+      ref.get().then(doc=>{
+        const val = doc.data().good||0;
+        if(val>0) ref.update({good:val-1});
+      });
+    };
+
+    choreBtn.onclick = () => {
+      ref.get().then(doc=>{
+        const val = doc.data().badActive||0;
+        if(val>0) ref.update({badActive:val-1});
+      });
+    };
+
+    serveBtn.onclick = () => {
+      ref.get().then(doc=>{
+        const val = doc.data().techLockRemaining||0;
+        if(val>0) ref.update({techLockRemaining:val-1});
+      });
+    };
+
+    // Parent controls
     const div = document.createElement("div");
     div.innerHTML=`
       <h3>${name}</h3>
@@ -157,24 +188,25 @@ window.onload = function () {
     `;
     parentControls.appendChild(div);
 
+    // Firestore snapshot
     ref.onSnapshot(doc=>{
       if(!doc.exists) return;
       const d = doc.data();
-      el.dataset.good=d.good;
-      el.dataset.badActive=d.badActive;
-      el.dataset.badTotal=d.badTotal;
-      el.dataset.techEarned=d.techLockEarned;
-      el.dataset.techRemaining=d.techLockRemaining;
-
       el.querySelector(".goodStat").innerText = "🟢 Good: "+d.good;
       el.querySelector(".badStat").innerText = "🔴 Bad (Active): "+d.badActive;
       el.querySelector(".lockStat").innerText = d.techLockRemaining>0 ? "📵 Tech Lock Remaining: "+d.techLockRemaining : "🎉 Tech Available! Keep up the good choices!";
 
       // Parent modal buttons
-      document.getElementById(`${name}_setGood`).onclick = ()=>{ const val=parseInt(document.getElementById(`${name}_good`).value)||0; ref.update({good:val}); };
-      document.getElementById(`${name}_setBad`).onclick = ()=>{ const val=parseInt(document.getElementById(`${name}_badActive`).value)||0; ref.update({badActive:val}); };
-      document.getElementById(`${name}_serveTechBtn`).onclick = ()=>{ const val=parseInt(document.getElementById(`${name}_serveTech`).value)||0; if(val>0) ref.update({techLockRemaining:Math.max(0,d.techLockRemaining-val)}); };
-      document.getElementById(`${name}_reset`).onclick = ()=>{ ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); };
+      document.getElementById(`${name}_setGood`).onclick = ()=>{
+        const val=parseInt(document.getElementById(`${name}_good`).value)||0; ref.update({good:val});
+      };
+      document.getElementById(`${name}_setBad`).onclick = ()=>{
+        const val=parseInt(document.getElementById(`${name}_badActive`).value)||0; ref.update({badActive:val});
+      };
+      document.getElementById(`${name}_serveTechBtn`).onclick = ()=>{
+        const val=parseInt(document.getElementById(`${name}_serveTech`).value)||0; if(val>0) ref.update({techLockRemaining:Math.max(0,d.techLockRemaining-val)});
+      };
+      document.getElementById(`${name}_reset`).onclick = ()=>{ if(confirm(`Reset ${name}?`)) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); };
     });
   });
 };
