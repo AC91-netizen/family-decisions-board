@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Family Decisions Board</title>
+<title>Family Decisions Board - Child View</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <!-- Firebase SDK -->
@@ -15,75 +15,27 @@ h1 {padding:16px;}
 .board {display:flex; flex-wrap:wrap; justify-content:center;}
 .card {background:#1e293b;border-radius:14px;padding:16px;margin:12px;width:320px;}
 .stat {font-size:18px;margin:6px 0;}
-button {width:100%;padding:10px;margin:6px 0;border:none;border-radius:8px;font-size:16px;cursor:pointer;}
-.goodBtn {background:#22c55e;}
-.badBtn {background:#ef4444;}
-.spendBtn {background:#16a34a;}
-.choreBtn {background:#f59e0b;}
-.serveBtn {background:#3b82f6;}
-.resetBtn {background:#64748b;}
-#parentBtn {background:#fbbf24;width:auto;padding:8px 16px;margin:8px;border-radius:8px;font-size:16px;cursor:pointer;}
-.modalOverlay {position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;}
-.modal {background:#1e293b;padding:20px;border-radius:12px;width:90%;max-width:400px;text-align:left;}
-.closeBtn {margin-top:12px;background:#ef4444;color:#fff;width:auto;padding:6px 12px;border-radius:6px;}
-input[type=number]{width:60px;}
+.tip {font-size:14px;color:#facc15;margin-top:4px;}
 </style>
 </head>
 
 <body>
 
 <h1>Family Decisions Board</h1>
-<button id="parentBtn">Parent Settings</button>
 <div class="board" id="board"></div>
-
-<!-- Rules Modal -->
-<div class="modalOverlay" id="rulesModal">
-  <div class="modal">
-    <h2>Rules</h2>
-    <ul>
-      <li>Good tokens are earned for positive behaviour and can be spent on rewards.</li>
-      <li>Bad tokens are earned for poor decisions. Every 3 lifetime bads = 1 tech lock day (2 if after 3pm).</li>
-      <li>Chores can remove active bad tokens but never undo tech locks already earned.</li>
-      <li>Serving tech lock reduces remaining tech lock days.</li>
-      <li>Keep tech available by avoiding bad tokens!</li>
-    </ul>
-    <button class="closeBtn" onclick="document.getElementById('rulesModal').style.display='none'">Close</button>
-  </div>
-</div>
-
-<!-- Parent Settings Modal -->
-<div class="modalOverlay" id="parentModal">
-  <div class="modal">
-    <h2>Parent Settings</h2>
-    <div id="parentControls"></div>
-    <button class="closeBtn" onclick="document.getElementById('parentModal').style.display='none'">Close</button>
-  </div>
-</div>
 
 <script>
 window.onload = function () {
-
   const children = ["Nevaeh", "Arley"];
   const board = document.getElementById("board");
 
-  // Firebase initialization
   firebase.initializeApp({
     apiKey: "AIzaSyDdz0V7qMrYPN5_NmCYUMHSSf9JL5HAkAM",
     authDomain: "family-decisions-board-57d6a.firebaseapp.com",
     projectId: "family-decisions-board-57d6a"
   });
+
   const db = firebase.firestore();
-
-  // Open Parent Settings modal
-  document.getElementById("parentBtn").onclick = () => {
-    document.getElementById("parentModal").style.display="flex";
-  };
-
-  // Double-tap title opens rules
-  document.querySelector("h1").addEventListener("dblclick", ()=>{ document.getElementById("rulesModal").style.display="flex"; });
-
-  // Build cards and parent controls
-  const parentControls = document.getElementById("parentControls");
 
   children.forEach(name => {
     const card = document.createElement("div");
@@ -94,119 +46,36 @@ window.onload = function () {
       <div class="stat goodStat">🟢 Good: 0</div>
       <div class="stat badStat">🔴 Bad (Active): 0</div>
       <div class="stat lockStat">📵 Tech Lock Remaining: 0</div>
-
-      <button class="goodBtn">+ Good Decision</button>
-      <button class="badBtn">+ Bad Decision</button>
-      <button class="spendBtn">⭐ Spend Good Token</button>
-      <button class="choreBtn">🧹 Complete Chore</button>
-      <button class="serveBtn">Serve 1 Tech Day</button>
-      <button class="resetBtn">Reset</button>
+      <div class="tip" id="${name}_tip"></div>
     `;
     board.appendChild(card);
 
-    const el = card;
     const ref = db.collection("familyBoard").doc(name);
 
-    // Initialize doc if missing
-    ref.get().then(doc=>{ if(!doc.exists) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); });
+    // Initialize if missing
+    ref.get().then(doc => { 
+      if(!doc.exists) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); 
+    });
 
-    // Buttons
-    const goodBtn = el.querySelector(".goodBtn");
-    const badBtn = el.querySelector(".badBtn");
-    const spendBtn = el.querySelector(".spendBtn");
-    const choreBtn = el.querySelector(".choreBtn");
-    const serveBtn = el.querySelector(".serveBtn");
-    const resetBtn = el.querySelector(".resetBtn");
-
-    // Reset button
-    resetBtn.onclick = () => {
-      if(confirm(`Reset ${name}'s stats?`)) {
-        ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0});
-      }
-    };
-
-    // Other buttons
-    goodBtn.onclick = () => {
-      ref.get().then(doc=>{
-        const val = (doc.data().good||0)+1;
-        ref.update({good:val});
-      });
-    };
-
-    badBtn.onclick = () => {
-      ref.get().then(doc=>{
-        let data = doc.data();
-        let totalBad = (data.badTotal||0)+1;
-        let activeBad = (data.badActive||0)+1;
-        let good = Math.max(0,(data.good||0)-1);
-        let techEarned = data.techLockEarned||0;
-        let techRemaining = data.techLockRemaining||0;
-
-        if(totalBad % 3 === 0){
-          const after3pm = new Date().getHours()>=15;
-          const days = after3pm ? 2:1;
-          techEarned += days;
-          techRemaining += days;
-        }
-        ref.update({badTotal:totalBad,badActive:activeBad,good,techLockEarned:techEarned,techLockRemaining:techRemaining});
-      });
-    };
-
-    spendBtn.onclick = () => {
-      ref.get().then(doc=>{
-        const val = doc.data().good||0;
-        if(val>0) ref.update({good:val-1});
-      });
-    };
-
-    choreBtn.onclick = () => {
-      ref.get().then(doc=>{
-        const val = doc.data().badActive||0;
-        if(val>0) ref.update({badActive:val-1});
-      });
-    };
-
-    serveBtn.onclick = () => {
-      ref.get().then(doc=>{
-        const val = doc.data().techLockRemaining||0;
-        if(val>0) ref.update({techLockRemaining:val-1});
-      });
-    };
-
-    // Parent controls
-    const div = document.createElement("div");
-    div.innerHTML=`
-      <h3>${name}</h3>
-      <label>Good tokens: <input type="number" id="${name}_good"></label>
-      <button id="${name}_setGood">Set Good</button><br>
-      <label>Active Bad tokens: <input type="number" id="${name}_badActive"></label>
-      <button id="${name}_setBad">Set Active Bad</button><br>
-      <label>Serve tech lock days: <input type="number" id="${name}_serveTech"></label>
-      <button id="${name}_serveTechBtn">Serve</button><br>
-      <button id="${name}_reset">Reset Child</button>
-      <hr>
-    `;
-    parentControls.appendChild(div);
-
-    // Firestore snapshot
+    // Live updates
     ref.onSnapshot(doc=>{
       if(!doc.exists) return;
       const d = doc.data();
-      el.querySelector(".goodStat").innerText = "🟢 Good: "+d.good;
-      el.querySelector(".badStat").innerText = "🔴 Bad (Active): "+d.badActive;
-      el.querySelector(".lockStat").innerText = d.techLockRemaining>0 ? "📵 Tech Lock Remaining: "+d.techLockRemaining : "🎉 Tech Available! Keep up the good choices!";
+      card.querySelector(".goodStat").innerText = "🟢 Good: "+d.good;
+      card.querySelector(".badStat").innerText = "🔴 Bad (Active): "+d.badActive;
+      card.querySelector(".lockStat").innerText = d.techLockRemaining>0 ? "📵 Tech Lock Remaining: "+d.techLockRemaining : "🎉 Tech Available! Keep up the good choices!";
 
-      // Parent modal buttons
-      document.getElementById(`${name}_setGood`).onclick = ()=>{
-        const val=parseInt(document.getElementById(`${name}_good`).value)||0; ref.update({good:val});
-      };
-      document.getElementById(`${name}_setBad`).onclick = ()=>{
-        const val=parseInt(document.getElementById(`${name}_badActive`).value)||0; ref.update({badActive:val});
-      };
-      document.getElementById(`${name}_serveTechBtn`).onclick = ()=>{
-        const val=parseInt(document.getElementById(`${name}_serveTech`).value)||0; if(val>0) ref.update({techLockRemaining:Math.max(0,d.techLockRemaining-val)});
-      };
-      document.getElementById(`${name}_reset`).onclick = ()=>{ if(confirm(`Reset ${name}?`)) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); };
+      // Tips
+      const tip = card.querySelector(".tip");
+      if(d.techLockRemaining>0){
+        tip.innerText = "⚠️ Tech is locked. Focus on good behaviour!";
+      } else if(d.badActive>0){
+        tip.innerText = "Be careful! Try to avoid bad decisions.";
+      } else if(d.good>0){
+        tip.innerText = "Great job! Keep up the good choices!";
+      } else {
+        tip.innerText = "Make positive choices to earn rewards!";
+      }
     });
   });
 };
