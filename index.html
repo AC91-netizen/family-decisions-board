@@ -16,13 +16,40 @@ h1 {padding:16px;}
 .card {background:#1e293b;border-radius:14px;padding:16px;margin:12px;width:320px;}
 .stat {font-size:18px;margin:6px 0;}
 .tip {font-size:14px;color:#facc15;margin-top:4px;}
+button {padding:10px 16px;margin:6px;border:none;border-radius:8px;font-size:16px;cursor:pointer;}
+#adminBtn {background:#fbbf24;color:#000;}
+#rulesBtn {background:#3b82f6;color:#fff;}
+.modalOverlay {position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;}
+.modal {background:#1e293b;padding:20px;border-radius:12px;width:90%;max-width:400px;text-align:left;}
+.closeBtn {margin-top:12px;background:#ef4444;color:#fff;width:auto;padding:6px 12px;border-radius:6px;}
 </style>
 </head>
 
 <body>
 
 <h1>Family Decisions Board</h1>
+
+<div>
+  <button id="adminBtn">Go to Parent Page</button>
+  <button id="rulesBtn">Token Rules</button>
+</div>
+
 <div class="board" id="board"></div>
+
+<!-- Rules Modal -->
+<div class="modalOverlay" id="rulesModal">
+  <div class="modal">
+    <h2>Token Rules</h2>
+    <ul>
+      <li>🟢 Good tokens: Earned for positive behaviour. Can be saved/spent for rewards.</li>
+      <li>🔴 Bad tokens: Earned for poor choices. Every 3 lifetime bads = 1 tech lock day (2 if after 3pm).</li>
+      <li>Bad tokens cannot cancel tech locks already earned.</li>
+      <li>Chores can remove active bad tokens but not tech locks already assigned.</li>
+      <li>Tech available = 🎉 Keep making good choices!</li>
+    </ul>
+    <button class="closeBtn" onclick="document.getElementById('rulesModal').style.display='none'">Close</button>
+  </div>
+</div>
 
 <script>
 window.onload = function () {
@@ -36,6 +63,14 @@ window.onload = function () {
   });
 
   const db = firebase.firestore();
+
+  // Buttons
+  document.getElementById("adminBtn").onclick = ()=> {
+    window.location.href = "admin.html";
+  };
+  document.getElementById("rulesBtn").onclick = ()=> {
+    document.getElementById("rulesModal").style.display = "flex";
+  };
 
   children.forEach(name => {
     const card = document.createElement("div");
@@ -65,14 +100,18 @@ window.onload = function () {
       card.querySelector(".badStat").innerText = "🔴 Bad (Active): "+d.badActive;
       card.querySelector(".lockStat").innerText = d.techLockRemaining>0 ? "📵 Tech Lock Remaining: "+d.techLockRemaining : "🎉 Tech Available! Keep up the good choices!";
 
-      // Tips
+      // Tips logic based on individual stats
       const tip = card.querySelector(".tip");
       if(d.techLockRemaining>0){
         tip.innerText = "⚠️ Tech is locked. Focus on good behaviour!";
+      } else if(d.badActive>=3){
+        tip.innerText = "Uh-oh! Too many bad decisions, be careful!";
       } else if(d.badActive>0){
         tip.innerText = "Be careful! Try to avoid bad decisions.";
+      } else if(d.good>=5){
+        tip.innerText = "Awesome job! Keep up the great choices!";
       } else if(d.good>0){
-        tip.innerText = "Great job! Keep up the good choices!";
+        tip.innerText = "Good work! Keep earning tokens!";
       } else {
         tip.innerText = "Make positive choices to earn rewards!";
       }
