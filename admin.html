@@ -15,16 +15,17 @@ h1 {padding:16px;}
 .board {display:flex; flex-wrap:wrap; justify-content:center;}
 .card {background:#1e293b;border-radius:14px;padding:16px;margin:12px;width:320px;}
 .stat {font-size:18px;margin:6px 0;}
-button {width:100%;padding:10px;margin:6px 0;border:none;border-radius:8px;font-size:16px;cursor:pointer;}
+.tip {font-size:14px;color:#facc15;margin-top:4px;}
+button {padding:10px 16px;margin:6px 0;border:none;border-radius:8px;font-size:16px;cursor:pointer;}
 .goodBtn {background:#22c55e;}
 .badBtn {background:#ef4444;}
 .spendBtn {background:#16a34a;}
 .choreBtn {background:#f59e0b;}
 .serveBtn {background:#3b82f6;}
 .resetBtn {background:#64748b;}
+#childBtn {background:#fbbf24;color:#000;width:auto;}
 #pinContainer {margin:20px;}
 #loginBtn {background:#fbbf24;padding:10px 16px;border-radius:8px;font-size:16px;border:none;cursor:pointer;}
-.tip {font-size:14px;color:#facc15;margin-top:4px;}
 </style>
 </head>
 
@@ -38,23 +39,33 @@ button {width:100%;padding:10px;margin:6px 0;border:none;border-radius:8px;font-
   <p id="pinMsg"></p>
 </div>
 
+<div id="parentControls" style="display:none;">
+  <button id="childBtn">← Back to Child Page</button>
+</div>
+
 <div class="board" id="board" style="display:none;"></div>
 
 <script>
 window.onload = function () {
-  const CORRECT_PIN = "1234"; // Change your PIN
+  const CORRECT_PIN = "1234"; // Change PIN
   const pinInput = document.getElementById("parentPin");
   const pinMsg = document.getElementById("pinMsg");
   const board = document.getElementById("board");
+  const parentControls = document.getElementById("parentControls");
 
   document.getElementById("loginBtn").onclick = () => {
     if(pinInput.value===CORRECT_PIN){
       document.getElementById("pinContainer").style.display="none";
       board.style.display="flex";
+      parentControls.style.display="block";
       initBoard();
     } else {
       pinMsg.innerText="Incorrect PIN!";
     }
+  };
+
+  document.getElementById("childBtn").onclick = () => {
+    window.location.href = "index.html";
   };
 
   function initBoard(){
@@ -89,7 +100,9 @@ window.onload = function () {
       const ref = db.collection("familyBoard").doc(name);
 
       // Initialize if missing
-      ref.get().then(doc=>{ if(!doc.exists) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); });
+      ref.get().then(doc=>{
+        if(!doc.exists) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0});
+      });
 
       const goodBtn = card.querySelector(".goodBtn");
       const badBtn = card.querySelector(".badBtn");
@@ -99,8 +112,10 @@ window.onload = function () {
       const resetBtn = card.querySelector(".resetBtn");
 
       goodBtn.onclick = () => ref.get().then(doc=>{
-        const val = (doc.data().good||0)+1; ref.update({good:val});
+        const val = (doc.data().good||0)+1;
+        ref.update({good:val});
       });
+
       badBtn.onclick = () => ref.get().then(doc=>{
         let data = doc.data();
         let totalBad = (data.badTotal||0)+1;
@@ -108,6 +123,7 @@ window.onload = function () {
         let good = Math.max(0,(data.good||0)-1);
         let techEarned = data.techLockEarned||0;
         let techRemaining = data.techLockRemaining||0;
+        // Every 3 bads = tech lock
         if(totalBad%3===0){
           const after3pm = new Date().getHours()>=15;
           const days = after3pm?2:1;
@@ -116,37 +132,51 @@ window.onload = function () {
         }
         ref.update({badTotal:totalBad,badActive:activeBad,good,techLockEarned:techEarned,techLockRemaining:techRemaining});
       });
+
       spendBtn.onclick = () => ref.get().then(doc=>{
         const val = doc.data().good||0;
         if(val>0) ref.update({good:val-1});
       });
+
       choreBtn.onclick = () => ref.get().then(doc=>{
         const val = doc.data().badActive||0;
         if(val>0) ref.update({badActive:val-1});
       });
+
       serveBtn.onclick = () => ref.get().then(doc=>{
         const val = doc.data().techLockRemaining||0;
         if(val>0) ref.update({techLockRemaining:val-1});
       });
-      resetBtn.onclick = () => { if(confirm(`Reset ${name}'s stats?`)) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); };
 
+      resetBtn.onclick = () => {
+        if(confirm(`Reset ${name}'s stats?`))
+          ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0});
+      };
+
+      // Live updates
       ref.onSnapshot(doc=>{
         if(!doc.exists) return;
         const d = doc.data();
         card.querySelector(".goodStat").innerText="🟢 Good: "+d.good;
         card.querySelector(".badStat").innerText="🔴 Bad (Active): "+d.badActive;
         card.querySelector(".lockStat").innerText=d.techLockRemaining>0 ? "📵 Tech Lock Remaining: "+d.techLockRemaining : "🎉 Tech Available! Keep up the good choices!";
+
         const tip = card.querySelector(".tip");
         if(d.techLockRemaining>0){
           tip.innerText="⚠️ Tech is locked. Focus on good behaviour!";
+        } else if(d.badActive>=3){
+          tip.innerText="Uh-oh! Too many bad decisions, be careful!";
         } else if(d.badActive>0){
           tip.innerText="Be careful! Try to avoid bad decisions.";
+        } else if(d.good>=5){
+          tip.innerText="Awesome job! Keep up the great choices!";
         } else if(d.good>0){
-          tip.innerText="Great job! Keep up the good choices!";
+          tip.innerText="Good work! Keep earning tokens!";
         } else {
           tip.innerText="Make positive choices to earn rewards!";
         }
       });
+
     });
   }
 };
