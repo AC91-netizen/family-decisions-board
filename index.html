@@ -64,15 +64,15 @@ window.onload = function () {
   const children = ["Nevaeh", "Arley"];
   const board = document.getElementById("board");
 
+  // Firebase initialization
   firebase.initializeApp({
     apiKey: "AIzaSyDdz0V7qMrYPN5_NmCYUMHSSf9JL5HAkAM",
     authDomain: "family-decisions-board-57d6a.firebaseapp.com",
     projectId: "family-decisions-board-57d6a"
   });
-
   const db = firebase.firestore();
 
-  // Parent settings: long-press title
+  // Parent modal long-press title
   let pressTimer;
   const title = document.getElementById("pageTitle");
   title.addEventListener("mousedown", () => {
@@ -80,10 +80,12 @@ window.onload = function () {
   });
   title.addEventListener("mouseup", ()=>{ clearTimeout(pressTimer); });
 
-  // Double-tap title opens rules
+  // Rules modal double-click title
   title.addEventListener("dblclick", ()=>{ document.getElementById("rulesModal").style.display="flex"; });
 
-  // Build child cards
+  // Build cards and parent controls
+  const parentControls = document.getElementById("parentControls");
+
   children.forEach(name => {
     const card = document.createElement("div");
     card.className = "card";
@@ -102,14 +104,47 @@ window.onload = function () {
       <button class="resetBtn">Reset</button>
     `;
     board.appendChild(card);
-  });
 
-  // Build parent controls
-  const parentControls = document.getElementById("parentControls");
+    const el = card;
+    const ref = db.collection("familyBoard").doc(name);
 
-  children.forEach(name => {
+    // Initialize doc if missing
+    ref.get().then(doc=>{ if(!doc.exists) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); });
+
+    // Attach buttons once
+    const goodBtn = el.querySelector(".goodBtn");
+    const badBtn = el.querySelector(".badBtn");
+    const spendBtn = el.querySelector(".spendBtn");
+    const choreBtn = el.querySelector(".choreBtn");
+    const serveBtn = el.querySelector(".serveBtn");
+    const resetBtn = el.querySelector(".resetBtn");
+
+    let resetTimer;
+    resetBtn.addEventListener("mousedown",()=>{ resetTimer=setTimeout(()=>{ ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); },2000); });
+    resetBtn.addEventListener("mouseup",()=>{ clearTimeout(resetTimer); });
+
+    goodBtn.onclick = ()=>ref.update({good:(el.dataset.good||0)+1});
+    badBtn.onclick = ()=>{
+      let total=parseInt(el.dataset.badTotal||0)+1;
+      let active=parseInt(el.dataset.badActive||0)+1;
+      let good=Math.max(0,(el.dataset.good||0)-1);
+      let techEarned=parseInt(el.dataset.techEarned||0);
+      let techRemaining=parseInt(el.dataset.techRemaining||0);
+      if(total%3===0){
+        const after3pm = new Date().getHours()>=15;
+        const days = after3pm?2:1;
+        techEarned += days;
+        techRemaining += days;
+      }
+      ref.update({badTotal:total,badActive:active,good,techLockEarned:techEarned,techLockRemaining:techRemaining});
+    };
+    spendBtn.onclick=()=>{ const g=parseInt(el.dataset.good||0); if(g>0) ref.update({good:g-1}); };
+    choreBtn.onclick=()=>{ const b=parseInt(el.dataset.badActive||0); if(b>0) ref.update({badActive:b-1}); };
+    serveBtn.onclick=()=>{ const t=parseInt(el.dataset.techRemaining||0); if(t>0) ref.update({techLockRemaining:t-1}); };
+
+    // Parent Controls
     const div = document.createElement("div");
-    div.innerHTML = `
+    div.innerHTML=`
       <h3>${name}</h3>
       <label>Good tokens: <input type="number" id="${name}_good"></label>
       <button id="${name}_setGood">Set Good</button><br>
@@ -117,63 +152,31 @@ window.onload = function () {
       <button id="${name}_setBad">Set Active Bad</button><br>
       <label>Serve tech lock days: <input type="number" id="${name}_serveTech"></label>
       <button id="${name}_serveTechBtn">Serve</button><br>
-      <button id="${name}_reset">Reset Child</button><hr>
+      <button id="${name}_reset">Reset Child</button>
+      <hr>
     `;
     parentControls.appendChild(div);
-  });
 
-  // Attach Firebase logic
-  children.forEach(name => {
-    const ref = db.collection("familyBoard").doc(name);
-
-    // Initialize if missing
-    ref.get().then(doc => { if(!doc.exists) {
-      ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0});
-    }});
-
-    ref.onSnapshot(doc => {
+    ref.onSnapshot(doc=>{
       if(!doc.exists) return;
       const d = doc.data();
-      const el = document.getElementById(name);
+      el.dataset.good=d.good;
+      el.dataset.badActive=d.badActive;
+      el.dataset.badTotal=d.badTotal;
+      el.dataset.techEarned=d.techLockEarned;
+      el.dataset.techRemaining=d.techLockRemaining;
 
       el.querySelector(".goodStat").innerText = "🟢 Good: "+d.good;
       el.querySelector(".badStat").innerText = "🔴 Bad (Active): "+d.badActive;
       el.querySelector(".lockStat").innerText = d.techLockRemaining>0 ? "📵 Tech Lock Remaining: "+d.techLockRemaining : "🎉 Tech Available! Keep up the good choices!";
 
-      // Buttons
-      el.querySelector(".goodBtn").onclick = ()=>ref.update({good:d.good+1});
-      el.querySelector(".badBtn").onclick = ()=>{
-        let badTotal=d.badTotal+1;
-        let badActive=d.badActive+1;
-        let good=Math.max(0,d.good-1);
-        let techEarned=d.techLockEarned;
-        let techRemaining=d.techLockRemaining;
-        if(badTotal%3===0){
-          const after3pm=new Date().getHours()>=15;
-          const days=after3pm?2:1;
-          techEarned+=days;
-          techRemaining+=days;
-        }
-        ref.update({badTotal,badActive,good,techLockEarned:techEarned,techLockRemaining:techRemaining});
-      };
-      el.querySelector(".spendBtn").onclick=()=>{if(d.good>0)ref.update({good:d.good-1});};
-      el.querySelector(".choreBtn").onclick=()=>{if(d.badActive>0)ref.update({badActive:d.badActive-1});};
-
-      // Long-press reset 2 sec
-      let resetTimer;
-      el.querySelector(".resetBtn").addEventListener("mousedown",()=>{resetTimer=setTimeout(()=>{ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0});},2000);});
-      el.querySelector(".resetBtn").addEventListener("mouseup",()=>{clearTimeout(resetTimer);});
-
-      el.querySelector(".serveBtn").onclick=()=>{if(d.techLockRemaining>0)ref.update({techLockRemaining:d.techLockRemaining-1});};
-
-      // Parent modal controls
-      document.getElementById(`${name}_setGood`).onclick=()=>{const val=parseInt(document.getElementById(`${name}_good`).value)||0; ref.update({good:val});};
-      document.getElementById(`${name}_setBad`).onclick=()=>{const val=parseInt(document.getElementById(`${name}_badActive`).value)||0; ref.update({badActive:val});};
-      document.getElementById(`${name}_serveTechBtn`).onclick=()=>{const val=parseInt(document.getElementById(`${name}_serveTech`).value)||0; if(val>0) ref.update({techLockRemaining:Math.max(0,d.techLockRemaining-val)});};
-      document.getElementById(`${name}_reset`).onclick=()=>{ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0});};
+      // Parent modal buttons
+      document.getElementById(`${name}_setGood`).onclick = ()=>{ const val=parseInt(document.getElementById(`${name}_good`).value)||0; ref.update({good:val}); };
+      document.getElementById(`${name}_setBad`).onclick = ()=>{ const val=parseInt(document.getElementById(`${name}_badActive`).value)||0; ref.update({badActive:val}); };
+      document.getElementById(`${name}_serveTechBtn`).onclick = ()=>{ const val=parseInt(document.getElementById(`${name}_serveTech`).value)||0; if(val>0) ref.update({techLockRemaining:Math.max(0,d.techLockRemaining-val)}); };
+      document.getElementById(`${name}_reset`).onclick = ()=>{ ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); };
     });
   });
-
 };
 </script>
 
