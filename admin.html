@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Family Decisions Board - Parent Admin</title>
+<title>Family Decisions Board - Parent</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <!-- Firebase SDK -->
@@ -16,14 +16,21 @@ h1 {padding:16px;}
 .card {background:#1e293b;border-radius:14px;padding:16px;margin:12px;width:320px;}
 .stat {font-size:18px;margin:6px 0;}
 button {width:100%;padding:10px;margin:6px 0;border:none;border-radius:8px;font-size:16px;cursor:pointer;}
-input[type=number]{width:60px;}
+.goodBtn {background:#22c55e;}
+.badBtn {background:#ef4444;}
+.spendBtn {background:#16a34a;}
+.choreBtn {background:#f59e0b;}
+.serveBtn {background:#3b82f6;}
+.resetBtn {background:#64748b;}
 #pinContainer {margin:20px;}
 #loginBtn {background:#fbbf24;padding:10px 16px;border-radius:8px;font-size:16px;border:none;cursor:pointer;}
+.tip {font-size:14px;color:#facc15;margin-top:4px;}
 </style>
 </head>
+
 <body>
 
-<h1>Parent Admin Dashboard</h1>
+<h1>Parent Dashboard</h1>
 
 <div id="pinContainer">
   <label>Enter Parent PIN: <input type="password" id="parentPin"></label>
@@ -35,13 +42,13 @@ input[type=number]{width:60px;}
 
 <script>
 window.onload = function () {
-  const CORRECT_PIN = "1234"; // Change this to your chosen PIN
+  const CORRECT_PIN = "1234"; // Change your PIN
   const pinInput = document.getElementById("parentPin");
   const pinMsg = document.getElementById("pinMsg");
   const board = document.getElementById("board");
 
   document.getElementById("loginBtn").onclick = () => {
-    if(pinInput.value === CORRECT_PIN){
+    if(pinInput.value===CORRECT_PIN){
       document.getElementById("pinContainer").style.display="none";
       board.style.display="flex";
       initBoard();
@@ -53,7 +60,6 @@ window.onload = function () {
   function initBoard(){
     const children = ["Nevaeh", "Arley"];
 
-    // Firebase init
     firebase.initializeApp({
       apiKey: "AIzaSyDdz0V7qMrYPN5_NmCYUMHSSf9JL5HAkAM",
       authDomain: "family-decisions-board-57d6a.firebaseapp.com",
@@ -61,7 +67,7 @@ window.onload = function () {
     });
     const db = firebase.firestore();
 
-    children.forEach(name=>{
+    children.forEach(name => {
       const card = document.createElement("div");
       card.className="card";
       card.id=name;
@@ -70,48 +76,76 @@ window.onload = function () {
         <div class="stat goodStat">🟢 Good: 0</div>
         <div class="stat badStat">🔴 Bad (Active): 0</div>
         <div class="stat lockStat">📵 Tech Lock Remaining: 0</div>
-
-        <label>Good tokens: <input type="number" id="${name}_good"></label>
-        <button id="${name}_setGood">Set Good</button><br>
-        <label>Active Bad tokens: <input type="number" id="${name}_badActive"></label>
-        <button id="${name}_setBad">Set Active Bad</button><br>
-        <label>Serve tech lock days: <input type="number" id="${name}_serveTech"></label>
-        <button id="${name}_serveTechBtn">Serve</button><br>
-        <button id="${name}_reset">Reset Child</button>
+        <div class="tip" id="${name}_tip"></div>
+        <button class="goodBtn">+ Good Decision</button>
+        <button class="badBtn">+ Bad Decision</button>
+        <button class="spendBtn">⭐ Spend Good Token</button>
+        <button class="choreBtn">🧹 Complete Chore</button>
+        <button class="serveBtn">Serve 1 Tech Day</button>
+        <button class="resetBtn">Reset</button>
       `;
       board.appendChild(card);
 
       const ref = db.collection("familyBoard").doc(name);
 
-      // Initialize doc if missing
+      // Initialize if missing
       ref.get().then(doc=>{ if(!doc.exists) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); });
 
-      // Snapshot listener
+      const goodBtn = card.querySelector(".goodBtn");
+      const badBtn = card.querySelector(".badBtn");
+      const spendBtn = card.querySelector(".spendBtn");
+      const choreBtn = card.querySelector(".choreBtn");
+      const serveBtn = card.querySelector(".serveBtn");
+      const resetBtn = card.querySelector(".resetBtn");
+
+      goodBtn.onclick = () => ref.get().then(doc=>{
+        const val = (doc.data().good||0)+1; ref.update({good:val});
+      });
+      badBtn.onclick = () => ref.get().then(doc=>{
+        let data = doc.data();
+        let totalBad = (data.badTotal||0)+1;
+        let activeBad = (data.badActive||0)+1;
+        let good = Math.max(0,(data.good||0)-1);
+        let techEarned = data.techLockEarned||0;
+        let techRemaining = data.techLockRemaining||0;
+        if(totalBad%3===0){
+          const after3pm = new Date().getHours()>=15;
+          const days = after3pm?2:1;
+          techEarned+=days;
+          techRemaining+=days;
+        }
+        ref.update({badTotal:totalBad,badActive:activeBad,good,techLockEarned:techEarned,techLockRemaining:techRemaining});
+      });
+      spendBtn.onclick = () => ref.get().then(doc=>{
+        const val = doc.data().good||0;
+        if(val>0) ref.update({good:val-1});
+      });
+      choreBtn.onclick = () => ref.get().then(doc=>{
+        const val = doc.data().badActive||0;
+        if(val>0) ref.update({badActive:val-1});
+      });
+      serveBtn.onclick = () => ref.get().then(doc=>{
+        const val = doc.data().techLockRemaining||0;
+        if(val>0) ref.update({techLockRemaining:val-1});
+      });
+      resetBtn.onclick = () => { if(confirm(`Reset ${name}'s stats?`)) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); };
+
       ref.onSnapshot(doc=>{
         if(!doc.exists) return;
         const d = doc.data();
         card.querySelector(".goodStat").innerText="🟢 Good: "+d.good;
         card.querySelector(".badStat").innerText="🔴 Bad (Active): "+d.badActive;
-        card.querySelector(".lockStat").innerText=d.techLockRemaining>0 ? "📵 Tech Lock Remaining: "+d.techLockRemaining : "🎉 Tech Available!";
-
-        // Buttons
-        document.getElementById(`${name}_setGood`).onclick = ()=>{
-          const val = parseInt(document.getElementById(`${name}_good`).value)||0;
-          ref.update({good:val});
-        };
-        document.getElementById(`${name}_setBad`).onclick = ()=>{
-          const val = parseInt(document.getElementById(`${name}_badActive`).value)||0;
-          ref.update({badActive:val});
-        };
-        document.getElementById(`${name}_serveTechBtn`).onclick = ()=>{
-          const val = parseInt(document.getElementById(`${name}_serveTech`).value)||0;
-          if(val>0) ref.update({techLockRemaining:Math.max(0,d.techLockRemaining-val)});
-        };
-        document.getElementById(`${name}_reset`).onclick = ()=>{
-          if(confirm(`Reset ${name}'s stats?`)){
-            ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0});
-          }
-        };
+        card.querySelector(".lockStat").innerText=d.techLockRemaining>0 ? "📵 Tech Lock Remaining: "+d.techLockRemaining : "🎉 Tech Available! Keep up the good choices!";
+        const tip = card.querySelector(".tip");
+        if(d.techLockRemaining>0){
+          tip.innerText="⚠️ Tech is locked. Focus on good behaviour!";
+        } else if(d.badActive>0){
+          tip.innerText="Be careful! Try to avoid bad decisions.";
+        } else if(d.good>0){
+          tip.innerText="Great job! Keep up the good choices!";
+        } else {
+          tip.innerText="Make positive choices to earn rewards!";
+        }
       });
     });
   }
