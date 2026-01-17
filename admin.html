@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Family Decisions Board - Parent Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+body {margin:0;font-family:Arial,sans-serif;background:#0f172a;color:#fff;text-align:center;}
+h1 {padding:16px;}
+.board {display:flex; flex-wrap:wrap; justify-content:center;}
+.card {background:#1e293b;border-radius:14px;padding:16px;margin:12px;width:320px;}
+.stat {font-size:18px;margin:6px 0;}
+button {width:100%;padding:10px;margin:6px 0;border:none;border-radius:8px;font-size:16px;cursor:pointer;}
+input[type=number]{width:60px;}
+#pinContainer {margin:20px;}
+#loginBtn {background:#fbbf24;padding:10px 16px;border-radius:8px;font-size:16px;border:none;cursor:pointer;}
+</style>
+</head>
+<body>
+
+<h1>Parent Admin Dashboard</h1>
+
+<div id="pinContainer">
+  <label>Enter Parent PIN: <input type="password" id="parentPin"></label>
+  <button id="loginBtn">Enter</button>
+  <p id="pinMsg"></p>
+</div>
+
+<div class="board" id="board" style="display:none;"></div>
+
+<script>
+window.onload = function () {
+  const CORRECT_PIN = "1234"; // Change this to your chosen PIN
+  const pinInput = document.getElementById("parentPin");
+  const pinMsg = document.getElementById("pinMsg");
+  const board = document.getElementById("board");
+
+  document.getElementById("loginBtn").onclick = () => {
+    if(pinInput.value === CORRECT_PIN){
+      document.getElementById("pinContainer").style.display="none";
+      board.style.display="flex";
+      initBoard();
+    } else {
+      pinMsg.innerText="Incorrect PIN!";
+    }
+  };
+
+  function initBoard(){
+    const children = ["Nevaeh", "Arley"];
+
+    // Firebase init
+    firebase.initializeApp({
+      apiKey: "AIzaSyDdz0V7qMrYPN5_NmCYUMHSSf9JL5HAkAM",
+      authDomain: "family-decisions-board-57d6a.firebaseapp.com",
+      projectId: "family-decisions-board-57d6a"
+    });
+    const db = firebase.firestore();
+
+    children.forEach(name=>{
+      const card = document.createElement("div");
+      card.className="card";
+      card.id=name;
+      card.innerHTML=`
+        <h2>${name}</h2>
+        <div class="stat goodStat">🟢 Good: 0</div>
+        <div class="stat badStat">🔴 Bad (Active): 0</div>
+        <div class="stat lockStat">📵 Tech Lock Remaining: 0</div>
+
+        <label>Good tokens: <input type="number" id="${name}_good"></label>
+        <button id="${name}_setGood">Set Good</button><br>
+        <label>Active Bad tokens: <input type="number" id="${name}_badActive"></label>
+        <button id="${name}_setBad">Set Active Bad</button><br>
+        <label>Serve tech lock days: <input type="number" id="${name}_serveTech"></label>
+        <button id="${name}_serveTechBtn">Serve</button><br>
+        <button id="${name}_reset">Reset Child</button>
+      `;
+      board.appendChild(card);
+
+      const ref = db.collection("familyBoard").doc(name);
+
+      // Initialize doc if missing
+      ref.get().then(doc=>{ if(!doc.exists) ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0}); });
+
+      // Snapshot listener
+      ref.onSnapshot(doc=>{
+        if(!doc.exists) return;
+        const d = doc.data();
+        card.querySelector(".goodStat").innerText="🟢 Good: "+d.good;
+        card.querySelector(".badStat").innerText="🔴 Bad (Active): "+d.badActive;
+        card.querySelector(".lockStat").innerText=d.techLockRemaining>0 ? "📵 Tech Lock Remaining: "+d.techLockRemaining : "🎉 Tech Available!";
+
+        // Buttons
+        document.getElementById(`${name}_setGood`).onclick = ()=>{
+          const val = parseInt(document.getElementById(`${name}_good`).value)||0;
+          ref.update({good:val});
+        };
+        document.getElementById(`${name}_setBad`).onclick = ()=>{
+          const val = parseInt(document.getElementById(`${name}_badActive`).value)||0;
+          ref.update({badActive:val});
+        };
+        document.getElementById(`${name}_serveTechBtn`).onclick = ()=>{
+          const val = parseInt(document.getElementById(`${name}_serveTech`).value)||0;
+          if(val>0) ref.update({techLockRemaining:Math.max(0,d.techLockRemaining-val)});
+        };
+        document.getElementById(`${name}_reset`).onclick = ()=>{
+          if(confirm(`Reset ${name}'s stats?`)){
+            ref.set({good:0,badActive:0,badTotal:0,techLockEarned:0,techLockRemaining:0});
+          }
+        };
+      });
+    });
+  }
+};
+</script>
+
+</body>
+</html>
